@@ -72,8 +72,8 @@ def _retrieve_data(keyw, page=1):
     req = requests.get(url)
     r_json = req.json()
 
-    if req.status_code == 200:
-        #  Good status is returned. Call again with next page
+    if req.status_code == 200 and req.json().get('items'):
+        #  Good status is returned with data. Call again with next page
         r_json['items'].extend(_retrieve_data(keyw, page + 1).get('items', []))
 
     return r_json
