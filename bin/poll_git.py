@@ -18,6 +18,7 @@ this may cause a temporary lockout if run too many times within an hour.
 
 import argparse
 import json
+import sys
 
 import requests
 
@@ -26,7 +27,7 @@ import requests
 #                                  GLOBALS                                    #
 # =========================================================================== #
 BASE_URL = 'https://api.github.com/search/repositories'
-QUALIFIERS = '?q=%s&sort=forks&order=desc&per_page=100&page=%d'
+QUALIFIERS = '?q=%s&sort=forks&order=desc&per_page=%d&page=%d'
 
 DATA_KEYS = {'id',
              'name',
@@ -44,7 +45,7 @@ OWNER_KEYS = {'login', 'id', 'url'}
 # =========================================================================== #
 #                                  FUNCTIONS                                  #
 # =========================================================================== #
-def _retrieve_data(keyw, page=1):
+def _retrieve_data(keyw, limit, page=1):
     """
     poll_git._retrieve_data
 
@@ -67,14 +68,16 @@ def _retrieve_data(keyw, page=1):
         To maximize efficiency, the 'per_page' qualifier should be set to the
         maximum that GIT allows (currently 100)
     """
-    url = BASE_URL + QUALIFIERS % (keyw, page)
+    #  Max results per page is 100
+    per_page = limit if limit < 100 else 100
+    url = BASE_URL + QUALIFIERS % (keyw, per_page, page)
 
     req = requests.get(url)
     r_json = req.json()
 
-    if req.status_code == 200 and req.json().get('items'):
-        #  Good status is returned with data. Call again with next page
-        r_json['items'].extend(_retrieve_data(keyw, page + 1).get('items', []))
+    if limit > 100:
+        r_json['items'].extend(_retrieve_data(keyw, limit - 100, page + 1).
+                               get('items', []))
 
     return r_json
 
@@ -148,27 +151,27 @@ def main():
     #  test mode flag will be used to optionally commit the db updates
     #  (i.e., if we are in test mode don't commit, do a rollback)
     parser.add_argument('keyword', type=str, help='Keyword')
-    parser.add_argument('limit', type=int, help='List limit')
+    parser.add_argument('limit', type=int, help='List limit (1-1000)')
     args = parser.parse_args()
+
+    #  Check to make sure limit it within range
+    if args.limit < 1 or args.limit > 1000:
+        print 'ERROR: limit [%s] is not in the range 1-1000' % args.limit
+        sys.exit(1)
 
     #  Retrieve all the repositories from GitHub with the keyword, ordered
     #  by descending number of forks
-    data = _retrieve_data(args.keyword)
-    total_repositories = len(data['items'])
+    data = _retrieve_data(args.keyword, args.limit)
 
-    #  process data
-    #    limit 'items' list size to number arg
-    data['items'] = data['items'][:args.limit]
-
-    #    pair down repository dict fields
+    #  pair down repository dict fields
     for item in data['items']:
         _filter_dict(item, DATA_KEYS)
         _filter_dict(item['owner'], OWNER_KEYS)
 
-    #  convert dict to final dict format
+    #  create final dict
     json_dict = {'keyword': args.keyword,
                  'repository_limit': args.limit,
-                 'total_repositories': total_repositories,
+                 'total_repositories': data['total_count'],
                  'repo_list': data['items']}
 
     print json.dumps(json_dict, indent=4)
