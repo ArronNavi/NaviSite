@@ -9,7 +9,6 @@ Print a JSON dictionary by polling github for the repositories containing
 a given keyword, ordered by the number of forks (descending).
 
 
-
 Design Considerations:
 
 This script is run without user authentication. Because of GitHub restrictions,
@@ -90,7 +89,7 @@ def _filter_dict(src_dict, key_set):
 
     args:
         src_dict - (dictionary) Dictionary being filtered
-        key_list - (set) Set of keys to keep
+        key_set - (set) Set of keys to keep
     """
     for k in set(src_dict.keys()) - key_set:
         src_dict.pop(k)
